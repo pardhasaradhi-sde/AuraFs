@@ -675,7 +675,11 @@ AuraFS is a **real-time, AI-powered semantic file organizer** that combines:
 
 ### Team
 
-**VNR Hackathon 2026**
+**It Works On My Machine**
+
+### TeamLead
+
+**Pardha Saradhi(Pardhu)**
 
 ### Tech Stack Summary
 
