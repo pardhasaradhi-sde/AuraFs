@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-primary bg-background-light font-display;
+  }
+}
+
+@layer components {
+  /* AuraFS Dashboard Custom Utilities */
+  .sharp-border {
+    @apply border border-primary;
+  }
+  
+  /* Custom Dashed Line Generator */
+  .dashed-connector {
+    background-image: linear-gradient(to right, #141414 50%, transparent 50%);
+    background-size: 8px 1px;
+    background-repeat: repeat-x;
+  }
+  
+  /* Graph Container ensure full height */
+  .graph-container {
+    @apply w-full h-full relative overflow-hidden;
+  }
+}
+
+/* Custom Scrollbar for logs */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e5e5e5;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #141414;
+}

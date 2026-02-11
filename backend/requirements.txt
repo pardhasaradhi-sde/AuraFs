@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+watchdog
+pymupdf
+chardet
+sentence-transformers
+scikit-learn
+umap-learn
+numpy
+groq
+python-multipart
+python-dotenv

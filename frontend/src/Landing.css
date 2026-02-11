@@ -1,0 +1,26 @@
+/* Custom styles for AuraFS Landing Page */
+.workflow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #141414;
+  border: 1px solid white;
+  position: absolute;
+  z-index: 20;
+}
+
+.connector-line {
+  border-top: 1px dashed #141414;
+  flex-grow: 1;
+  height: 1px;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}

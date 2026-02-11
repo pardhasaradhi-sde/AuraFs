@@ -1,0 +1,23 @@
+﻿# Environment variables
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Root folder contents (user files)
+root/SEFS_*/
+root/*.pdf
+root/*.txt
+root/.staging/
