@@ -1,12 +1,22 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
-# Load model once — this runs on startup and caches
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Lazy-load the model to avoid slow transformers import at startup
+_model = None
 
 # Model's max token limit is ~256 word pieces, so we chunk at ~500 chars
 CHUNK_SIZE = 500  # characters per chunk
 MAX_CHUNKS = 20   # max chunks to process per file (covers ~10,000 chars)
+
+
+def _get_model():
+    """Lazy-load the SentenceTransformer model on first use."""
+    global _model
+    if _model is None:
+        print("[EMBEDDER] Loading embedding model...")
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer('all-MiniLM-L6-v2')
+        print("[EMBEDDER] Model loaded ✓")
+    return _model
 
 
 def embed_text(text: str) -> np.ndarray:
@@ -22,6 +32,7 @@ def embed_text(text: str) -> np.ndarray:
         return np.zeros(384)
     
     text = text.strip()
+    model = _get_model()
     
     # Short text — embed directly
     if len(text) <= CHUNK_SIZE:

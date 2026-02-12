@@ -203,6 +203,7 @@ def _is_ignored(file_path: str) -> bool:
 def _ingest_one(event_type: str, file_path: str):
     """Extract + embed + store ONE file. Does NOT cluster or move files."""
     file_name = Path(file_path).name
+    norm_path = os.path.abspath(file_path).lower()
 
     if _is_ignored(file_path):
         return
@@ -214,20 +215,37 @@ def _ingest_one(event_type: str, file_path: str):
             del state.files[file_path]
             removed = True
         else:
-            # Search by filename (path may have changed due to moves)
+            # Try normalized path match (handles case/slash differences)
             for fp in list(state.files.keys()):
-                if state.files[fp]["name"] == file_name:
+                if os.path.abspath(fp).lower() == norm_path:
+                    del state.files[fp]
+                    removed = True
+                    break
+        if not removed:
+            # Last resort: match by filename where old path is also dead
+            for fp in list(state.files.keys()):
+                if state.files[fp]["name"] == file_name and not os.path.exists(fp):
                     del state.files[fp]
                     removed = True
                     break
         if removed:
             log_and_broadcast("delete", f"Removed: {file_name}", "🗑️")
-            # Broadcast immediately so frontend sees the deletion
+            # Broadcast immediately so frontend sees the deletion right away
             _broadcast_state()
         return
 
     if event_type not in ('created', 'modified'):
         return
+
+    # Detect moved file: same filename exists in state at a path that no longer exists
+    for fp in list(state.files.keys()):
+        if fp != file_path and state.files[fp]["name"] == file_name and not os.path.exists(fp):
+            # This file was moved — update its path in state
+            file_data = state.files.pop(fp)
+            file_data["path"] = file_path
+            state.files[file_path] = file_data
+            log_and_broadcast("move", f"Moved: {file_name}", "📁")
+            return
 
     # Skip duplicate modified events for identical content
     if file_path in state.files and event_type == 'modified':
@@ -456,7 +474,8 @@ def _recluster_all():
 
 
 def _premark_moves(cluster_map: dict):
-    """Pre-mark destination paths as ignored BEFORE organiser moves files."""
+    """Pre-mark source AND destination paths as ignored BEFORE organiser moves files.
+    This prevents the watcher from treating internal organiser moves as user actions."""
     now = time.time()
     root_path = Path(ROOT_FOLDER)
     
@@ -466,6 +485,9 @@ def _premark_moves(cluster_map: dict):
             src = Path(file_path)
             if src.parent == dest_folder:
                 continue
+            # Mark source path as ignored (watcher would see 'deleted')
+            ignore_paths[os.path.abspath(str(src)).lower()] = now
+            # Mark destination path as ignored (watcher would see 'created')
             dest = dest_folder / src.name
             ignore_paths[os.path.abspath(str(dest)).lower()] = now
 
@@ -485,6 +507,95 @@ def _apply_moves(moves: dict):
             file_data = state.files.pop(old_path)
             file_data["path"] = new_path
             state.files[new_path] = file_data
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PERIODIC RECONCILIATION — catches missed events, ghost entries
+# ═══════════════════════════════════════════════════════════════════
+
+_RECONCILE_INTERVAL = 8  # seconds between reconciliation scans
+
+
+def _start_reconciliation_loop():
+    """Start background thread that periodically reconciles state with disk."""
+    def _loop():
+        while True:
+            time.sleep(_RECONCILE_INTERVAL)
+            if not _startup_done:
+                continue
+            try:
+                _reconcile_state()
+            except Exception as e:
+                print(f"[RECONCILE] Error: {e}")
+
+    t = threading.Thread(target=_loop, daemon=True)
+    t.start()
+
+
+def _reconcile_state():
+    """
+    Compare in-memory state against actual disk contents.
+    - Remove entries for files that no longer exist (ghosts)
+    - Detect new files on disk that aren't tracked
+    - Recluster if anything changed
+    """
+    changed = False
+
+    with pipeline_lock:
+        # ── 1. Remove ghost entries (file no longer on disk) ──────────
+        for fp in list(state.files.keys()):
+            if not os.path.exists(fp):
+                name = state.files[fp].get("name", Path(fp).name)
+                del state.files[fp]
+                log_and_broadcast("delete", f"Removed (missing): {name}", "🗑️")
+                changed = True
+
+        # ── 2. Scan disk for untracked files ─────────────────────────
+        root = Path(ROOT_FOLDER)
+        known = {os.path.abspath(fp).lower() for fp in state.files}
+
+        new_files = []
+
+        # Root-level files
+        try:
+            for f in root.iterdir():
+                if f.is_file() and f.suffix.lower() in {'.pdf', '.txt'}:
+                    if os.path.abspath(str(f)).lower() not in known:
+                        new_files.append(str(f))
+        except OSError:
+            pass
+
+        # Files inside SEFS_ folders
+        try:
+            for d in root.iterdir():
+                if d.is_dir() and d.name.startswith("SEFS_"):
+                    for f in d.rglob("*"):
+                        if f.is_file() and f.suffix.lower() in {'.pdf', '.txt'}:
+                            if os.path.abspath(str(f)).lower() not in known:
+                                new_files.append(str(f))
+        except OSError:
+            pass
+
+        # Files in .staging
+        staging = root / ".staging"
+        try:
+            if staging.exists():
+                for f in staging.iterdir():
+                    if f.is_file() and f.suffix.lower() in {'.pdf', '.txt'}:
+                        if os.path.abspath(str(f)).lower() not in known:
+                            new_files.append(str(f))
+        except OSError:
+            pass
+
+        for fp in new_files:
+            _ingest_one("created", fp)
+            changed = True
+
+    if changed:
+        # Broadcast immediately so frontend sees deletions
+        _broadcast_state()
+        # Schedule recluster to reorganize clusters and folders
+        _schedule_recluster()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -661,6 +772,7 @@ async def startup():
         args=(ROOT_FOLDER, process_pipeline),
         daemon=True
     ).start()
+    _start_reconciliation_loop()
 
     log_and_broadcast("startup", f"Watching: {ROOT_FOLDER}", "👁️")
 

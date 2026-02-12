@@ -21,7 +21,12 @@ class SEFSEventHandler(FileSystemEventHandler):
         self._lock = threading.Lock()
     
     def _should_ignore(self, path: str) -> bool:
-        """Ignore directories, .staging, SEFS_ folders, hidden files, or unsupported types."""
+        """Ignore directories, .staging, hidden files, or unsupported types.
+        
+        NOTE: We do NOT ignore SEFS_ managed folders here.
+        Internal moves by the organiser are filtered via ignore_paths in main.py,
+        so user-initiated deletes/moves inside SEFS_ folders are properly detected.
+        """
         p = Path(path)
         
         # Ignore directories
@@ -31,12 +36,6 @@ class SEFSEventHandler(FileSystemEventHandler):
         # Ignore .staging directory (intermediate uploads)
         for parent in p.parents:
             if parent.name == ".staging":
-                return True
-        
-        # Ignore ALL files inside SEFS_ managed folders
-        # This prevents the watcher from re-triggering on our own moves
-        for parent in p.parents:
-            if parent.name.startswith("SEFS_"):
                 return True
         
         # Ignore hidden files
