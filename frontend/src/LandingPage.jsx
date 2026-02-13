@@ -44,7 +44,7 @@ export default function LandingPage() {
                   LAUNCH DASHBOARD
                 </button>
                 <button 
-                  onClick={() => window.open('https://github.com', '_blank')}
+                  onClick={() => window.open('https://github.com/pardhasaradhi-sde/AuraFs', '_blank')}
                   className="border-2 border-primary px-8 py-4 text-base font-black hover:bg-primary hover:text-white transition-colors"
                 >
                   VIEW SOURCE
